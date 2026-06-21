@@ -69,6 +69,23 @@ def fetch_srtm_elevation(region):
     return image
 
 
+def fetch_gpm_rainfall(region, start_date, end_date):
+    cfg = DATASETS["gpm_rainfall"]
+    collection = (
+        ee.ImageCollection(cfg["collection"])
+        .filterDate(start_date, end_date)
+        .filterBounds(region)
+        .select(cfg["band"])
+    )
+    return collection.mean().clip(region)
+
+
+def fetch_srtm_slope(region):
+    srtm = ee.Image(DATASETS["srtm_elevation"]["collection"]).select("elevation")
+    slope = ee.Terrain.slope(srtm).clip(region)
+    return slope
+
+
 def export_to_geotiff(image, export_name, region, output_dir, scale=EXPORT_SCALE, crs=EXPORT_CRS):
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"{export_name}.tif")
@@ -98,6 +115,8 @@ def fetch_all(start_date=None, end_date=None, output_dir=None):
         "smap_soil_moisture": lambda: fetch_smap_soil_moisture(region, start_date, end_date),
         "modis_ndvi": lambda: fetch_modis_ndvi(region, start_date, end_date),
         "srtm_elevation": lambda: fetch_srtm_elevation(region),
+        "gpm_rainfall": lambda: fetch_gpm_rainfall(region, start_date, end_date),
+        "srtm_slope": lambda: fetch_srtm_slope(region),
     }
 
     exported = {}

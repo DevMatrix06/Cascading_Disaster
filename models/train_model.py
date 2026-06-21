@@ -47,7 +47,7 @@ def train():
     print(f"Device: {device}\n")
 
     graph      = torch.load(GRAPH_PATH, map_location=device, weights_only=False)
-    x          = graph.x                 # (2500, 4)
+    x          = graph.x                 # (2500, 6)
     temporal_x = graph.temporal_x        # (2500, 48, 3)
     edge_index = graph.edge_index
     y          = graph.y.to(device)
@@ -77,7 +77,7 @@ def train():
     # Simpler: use the same model for both — LSTM is stateless per forward pass,
     # so the same weights handle variable-length sequences.
     model = TemporalCascadeGNN(
-        static_in=4, temporal_in=3, lstm_hidden=32, hidden_channels=64
+        static_in=6, temporal_in=3, lstm_hidden=32, hidden_channels=64
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([9.0], device=device))

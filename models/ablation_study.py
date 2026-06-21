@@ -75,12 +75,12 @@ def train_loop(model, x, temporal_x, edge_index, y, train_idx, use_temporal=True
 # ── experiment 1: static only ────────────────────────────────────────────────
 
 def run_static(graph, train_idx, test_idx):
-    print("  Training Static CascadeGNN (4 features, no time series)...")
+    print("  Training Static CascadeGNN (6 features, no time series)...")
     x          = graph.x
     edge_index = graph.edge_index
     y          = graph.y
 
-    model = CascadeGNN(in_channels=4, hidden_channels=64, out_channels=1)
+    model = CascadeGNN(in_channels=6, hidden_channels=64, out_channels=1)
     model = train_loop(model, x, None, edge_index, y, train_idx, use_temporal=False)
     result = evaluate(model, x, None, edge_index, y, test_idx,
                       use_temporal=False, use_static=True)
@@ -98,7 +98,7 @@ def run_temporal_only(graph, train_idx, test_idx):
     edge_index = graph.edge_index
     y          = graph.y
 
-    model = TemporalCascadeGNN(static_in=4, temporal_in=3, lstm_hidden=32, hidden_channels=64)
+    model = TemporalCascadeGNN(static_in=6, temporal_in=3, lstm_hidden=32, hidden_channels=64)
     model = train_loop(model, x_zeros, temporal_x, edge_index, y, train_idx, use_temporal=True)
 
     # evaluate on test temporal window with zeroed static
@@ -126,7 +126,7 @@ def run_full(graph, train_idx, test_idx):
     edge_index = graph.edge_index
     y          = graph.y
 
-    model = TemporalCascadeGNN(static_in=4, temporal_in=3, lstm_hidden=32, hidden_channels=64)
+    model = TemporalCascadeGNN(static_in=6, temporal_in=3, lstm_hidden=32, hidden_channels=64)
     state = torch.load(FINAL_MODEL, map_location="cpu", weights_only=True)
     model.load_state_dict(state)
 

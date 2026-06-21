@@ -48,6 +48,16 @@ GEE_DATASETS = {
         "band": "elevation",
         "agg": "static",
     },
+    "rainfall": {
+        "collection": "NASA/GPM_L3/IMERG_MONTHLY_V06",
+        "band": "precipitation",
+        "agg": "mean",
+    },
+    "slope": {
+        "collection": "USGS/SRTMGL1_003",
+        "band": "elevation",
+        "agg": "slope",
+    },
 }
 
 
@@ -72,7 +82,9 @@ def fetch_arrays(bbox, start_date, end_date, ee):
     with tempfile.TemporaryDirectory() as tmp:
         for key, cfg in GEE_DATASETS.items():
             path = os.path.join(tmp, f"{key}.tif")
-            if cfg["agg"] == "static":
+            if cfg["agg"] == "slope":
+                image = ee.Terrain.slope(ee.Image(cfg["collection"]).select(cfg["band"])).clip(region)
+            elif cfg["agg"] == "static":
                 image = ee.Image(cfg["collection"]).select(cfg["band"]).clip(region)
             else:
                 col = (ee.ImageCollection(cfg["collection"])
@@ -99,8 +111,8 @@ def fetch_arrays(bbox, start_date, end_date, ee):
 def arrays_to_features(arrays, bbox, grid_size=GRID_SIZE):
     lats = np.linspace(bbox["north"], bbox["south"], grid_size + 1)
     lons = np.linspace(bbox["west"],  bbox["east"],  grid_size + 1)
-    keys = ["fire", "soil", "ndvi", "elevation"]
-    features = np.zeros((grid_size * grid_size, 4), dtype=np.float32)
+    keys = ["fire", "soil", "ndvi", "elevation", "rainfall", "slope"]
+    features = np.zeros((grid_size * grid_size, 6), dtype=np.float32)
 
     for f_idx, key in enumerate(keys):
         arr  = arrays[key]
@@ -135,7 +147,7 @@ def build_edges(grid_size=GRID_SIZE):
 # ── model ─────────────────────────────────────────────────────────────────────
 
 def load_model():
-    model = CascadeGNN(in_channels=4, hidden_channels=64, out_channels=1)
+    model = CascadeGNN(in_channels=6, hidden_channels=64, out_channels=1)
     for path in [STATIC_MODEL, FALLBACK_MODEL]:
         if os.path.exists(path):
             try:

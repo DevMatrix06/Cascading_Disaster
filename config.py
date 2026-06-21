@@ -36,6 +36,18 @@ DATASETS = {
         "description": "NASA SRTM Digital Elevation 30m",
         "export_name": "srtm_elevation_california",
     },
+    "gpm_rainfall": {
+        "collection": "NASA/GPM_L3/IMERG_MONTHLY_V06",
+        "band": "precipitation",
+        "description": "NASA GPM IMERG Monthly Mean Precipitation",
+        "export_name": "gpm_rainfall_california",
+    },
+    "srtm_slope": {
+        "collection": "USGS/SRTMGL1_003",
+        "band": "elevation",
+        "description": "SRTM-derived Slope in Degrees",
+        "export_name": "srtm_slope_california",
+    },
 }
 
 EXPORT_SCALE = 1000  # meters per pixel for raster exports

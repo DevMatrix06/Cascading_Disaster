@@ -12,7 +12,7 @@ from config import DATASETS, OUTPUT_DIR, CALIFORNIA_BBOX
 GRID_SIZE = 50
 OUTPUT_PATH = "data/processed/california_graph.pt"
 
-LAYER_ORDER = ["modis_fire", "smap_soil_moisture", "modis_ndvi", "srtm_elevation"]
+LAYER_ORDER = ["modis_fire", "smap_soil_moisture", "modis_ndvi", "srtm_elevation", "gpm_rainfall", "srtm_slope"]
 
 
 def load_raster(key):

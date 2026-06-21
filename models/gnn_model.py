@@ -5,7 +5,7 @@ from torch_geometric.nn import SAGEConv
 
 
 class CascadeGNN(nn.Module):
-    def __init__(self, in_channels=4, hidden_channels=64, out_channels=1, dropout=0.3):
+    def __init__(self, in_channels=6, hidden_channels=64, out_channels=1, dropout=0.3):
         super().__init__()
         self.conv1 = SAGEConv(in_channels, hidden_channels)
         self.conv2 = SAGEConv(hidden_channels, hidden_channels)
@@ -26,7 +26,7 @@ class CascadeGNN(nn.Module):
 
 
 class TemporalCascadeGNN(nn.Module):
-    def __init__(self, static_in=4, temporal_in=3, lstm_hidden=32,
+    def __init__(self, static_in=6, temporal_in=3, lstm_hidden=32,
                  hidden_channels=64, out_channels=1, dropout=0.3):
         super().__init__()
         # temporal encoder: LSTM over (num_months, temporal_in)

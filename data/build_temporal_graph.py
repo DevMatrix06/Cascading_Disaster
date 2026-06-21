@@ -147,8 +147,8 @@ def build_temporal_graph():
 
     torch.save(graph, OUTPUT_PATH)
 
-    print(f"\nTemporal feature shape : {tuple(graph.temporal_x.shape)}  (nodes × months × features)")
-    print(f"NaN values filled      : {nan_filled}  ({nan_before} before → 0 after)")
+    print(f"\nTemporal feature shape : {tuple(graph.temporal_x.shape)}  (nodes x months x features)")
+    print(f"NaN values filled      : {nan_filled}  ({nan_before} before -> 0 after)")
     print(f"Graph saved to         : {OUTPUT_PATH}")
 
     return graph

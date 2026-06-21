@@ -54,7 +54,7 @@ def _load_california():
 
     _graph = torch.load(GRAPH_PATH, map_location=device, weights_only=False)
 
-    _model_t = TemporalCascadeGNN(static_in=4, temporal_in=3, lstm_hidden=32, hidden_channels=64)
+    _model_t = TemporalCascadeGNN(static_in=6, temporal_in=3, lstm_hidden=32, hidden_channels=64)
     _model_t.load_state_dict(torch.load(TEMPORAL_MODEL, map_location=device, weights_only=True))
     _model_t.eval()
 
