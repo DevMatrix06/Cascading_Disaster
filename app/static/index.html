@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cascade Disaster Prediction Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #21262d;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --accent:    #f78166;
+    --blue:      #58a6ff;
+    --green:     #3fb950;
+    --yellow:    #d29922;
+    --red:       #da3633;
+    --critical:  #ff6b6b;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+
+  /* ── layout ── */
+  #app { display: grid; grid-template-columns: 240px 1fr 280px;
+         grid-template-rows: 48px 1fr 80px; height: 100vh; }
+
+  /* ── topbar ── */
+  #topbar { grid-column: 1 / -1; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+  #topbar h1 { font-size: 15px; font-weight: 600; color: var(--accent); letter-spacing: .3px; }
+  #topbar .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%;
+    box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  #topbar .subtitle { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  /* ── sidebar ── */
+  #sidebar { background: var(--surface); border-right: 1px solid var(--border);
+    padding: 14px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+  .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-bottom: 6px; }
+  select, input[type=date] { width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 12px; outline: none; }
+  select:focus, input:focus { border-color: var(--blue); }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0; }
+  .toggle-row label { color: var(--text); font-size: 12px; }
+  .toggle { position: relative; width: 32px; height: 18px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--border); border-radius: 18px;
+    cursor: pointer; transition: .2s; }
+  .slider::before { content:''; position:absolute; height:12px; width:12px; left:3px; bottom:3px;
+    background:#fff; border-radius:50%; transition:.2s; }
+  input:checked + .slider { background: var(--accent); }
+  input:checked + .slider::before { transform: translateX(14px); }
+  #analyze-btn { width: 100%; padding: 9px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-weight: 600; font-size: 13px;
+    cursor: pointer; transition: opacity .15s; }
+  #analyze-btn:hover { opacity: .85; }
+  #analyze-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .stat-pill { display: flex; justify-content: space-between; align-items: center;
+    background: var(--surface2); border-radius: 6px; padding: 7px 10px; font-size: 12px; }
+  .stat-pill span { color: var(--muted); }
+  .stat-pill strong { color: var(--text); }
+
+  /* ── map ── */
+  #map-container { position: relative; }
+  #map { width: 100%; height: 100%; }
+  #map-spinner { position: absolute; inset: 0; background: rgba(13,17,23,.7);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; z-index: 1000; font-size: 13px; color: var(--muted); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── right panel ── */
+  #right-panel { background: var(--surface); border-left: 1px solid var(--border);
+    padding: 14px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .risk-badge { display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .risk-Low      { background: #1a3a1a; color: var(--green); }
+  .risk-Medium   { background: #3a2e00; color: var(--yellow); }
+  .risk-High     { background: #3a1500; color: var(--accent); }
+  .risk-Critical { background: #3a0000; color: var(--critical); }
+  .risk-score-big { font-size: 32px; font-weight: 700; color: var(--text); line-height: 1; }
+  .risk-score-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .cascade-chain { display: flex; flex-direction: column; gap: 4px; }
+  .chain-step { display: flex; align-items: center; gap: 6px; }
+  .chain-node { background: var(--surface2); border: 1px solid var(--border);
+    padding: 4px 9px; border-radius: 5px; font-size: 11px; flex: 1; text-align: center; }
+  .chain-arrow { color: var(--accent); font-size: 14px; line-height: 1; }
+  .chain-lag { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .trigger-box { background: var(--surface2); border-left: 3px solid var(--accent);
+    padding: 8px 10px; border-radius: 0 6px 6px 0; font-size: 12px; line-height: 1.5;
+    color: var(--text); }
+  .trend-badge { font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .trend-increasing { background: #3a0000; color: var(--critical); }
+  .trend-decreasing { background: #1a3a1a; color: var(--green); }
+  .trend-stable     { background: var(--surface2); color: var(--muted); }
+  #ts-chart-container { height: 130px; }
+  .coord-line { font-size: 11px; color: var(--muted); }
+  .placeholder-msg { color: var(--muted); font-size: 12px; text-align: center;
+    padding: 20px 0; line-height: 1.6; }
+
+  /* ── bottom bar ── */
+  #bottombar { grid-column: 1 / -1; background: var(--surface);
+    border-top: 1px solid var(--border); display: flex; align-items: center;
+    padding: 0 16px; gap: 6px; overflow-x: auto; }
+  .bottom-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-right: 4px; white-space: nowrap; }
+  .top-zone { display: flex; align-items: center; gap: 6px; background: var(--surface2);
+    border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px;
+    cursor: pointer; transition: border-color .15s; white-space: nowrap; }
+  .top-zone:hover { border-color: var(--accent); }
+  .top-zone .tz-score { font-weight: 700; font-size: 12px; }
+  .top-zone .tz-loc { font-size: 11px; color: var(--muted); }
+  .bottom-right { margin-left: auto; display: flex; gap: 14px; align-items: center;
+    white-space: nowrap; }
+  .conf-val { color: var(--blue); font-weight: 600; }
+  .updated-val { color: var(--muted); font-size: 11px; }
+
+  /* ── progress bar ── */
+  #progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: var(--accent); z-index: 99999; transition: width .3s ease, opacity .4s ease;
+    box-shadow: 0 0 6px var(--accent); opacity: 0; }
+  #progress-bar.running { opacity: 1; }
+  #progress-bar.done { width: 100% !important; opacity: 0; transition: width .15s ease, opacity .5s ease .1s; }
+
+  /* ── toast ── */
+  #toast { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    background: #3a0000; color: var(--critical); border: 1px solid var(--critical);
+    padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    z-index: 9999; opacity: 0; pointer-events: none;
+    transition: opacity .25s; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+
+  /* ── panel loading skeleton ── */
+  .skeleton { background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+    background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 5px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .sk-line { height: 12px; margin-bottom: 8px; }
+  .sk-line.wide  { width: 90%; }
+  .sk-line.med   { width: 65%; }
+  .sk-line.short { width: 40%; }
+  .sk-block { height: 60px; margin-bottom: 8px; width: 100%; }
+
+  /* ── full-screen map error ── */
+  #map-error { position: absolute; inset: 0; background: var(--bg);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; z-index: 1001; text-align: center; padding: 40px; }
+  #map-error .err-icon { font-size: 48px; }
+  #map-error h2 { font-size: 18px; color: var(--text); }
+  #map-error p  { color: var(--muted); font-size: 13px; max-width: 360px; line-height: 1.6; }
+  #map-error button { padding: 9px 24px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-weight: 600; font-size: 13px;
+    cursor: pointer; transition: opacity .15s; }
+  #map-error button:hover { opacity: .85; }
+
+  /* slow-fetch notice in right panel */
+  #slow-notice { color: var(--muted); font-size: 11px; text-align: center;
+    padding: 8px 0 0; display: none; }
+
+  /* ── causal discovery section ── */
+  .causal-toggle { width: 100%; background: none; border: 1px solid var(--border);
+    color: var(--muted); padding: 6px 10px; border-radius: 6px; font-size: 11px;
+    text-align: left; cursor: pointer; transition: border-color .15s, color .15s;
+    display: flex; justify-content: space-between; align-items: center; }
+  .causal-toggle:hover { border-color: var(--blue); color: var(--text); }
+  .causal-toggle .chevron { transition: transform .2s; display: inline-block; }
+  .causal-toggle.open .chevron { transform: rotate(180deg); }
+  #causal-body { display: none; padding-top: 8px; }
+  #causal-body.open { display: block; }
+  #causal-svg { width: 100%; height: 200px; display: block; }
+  .causal-legend { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .causal-legend-item { display: flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--muted); }
+  .causal-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* leaflet overrides */
+  .leaflet-container { background: #0d1117 !important; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- topbar -->
+  <header id="topbar">
+    <div class="dot"></div>
+    <h1>&#9888; Cascade Disaster Prediction System</h1>
+    <span class="subtitle" id="top-status">Loading data…</span>
+  </header>
+
+  <!-- sidebar -->
+  <aside id="sidebar">
+    <div>
+      <div class="section-label">Region</div>
+      <select id="region-select">
+        <option value="california">California, USA</option>
+        <option value="australia">Eastern Australia</option>
+        <option value="amazon">Amazon Basin</option>
+      </select>
+    </div>
+    <div>
+      <div class="section-label">Date Range</div>
+      <input type="date" id="date-start" value="2020-01-01"/>
+      <div style="height:6px"></div>
+      <input type="date" id="date-end"   value="2023-12-31"/>
+    </div>
+    <div>
+      <div class="section-label">Hazard Layers</div>
+      <div class="toggle-row">
+        <label>&#128293; Wildfire</label>
+        <label class="toggle"><input type="checkbox" id="tog-fire" checked/><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <label>&#127754; Flood / Soil Saturation</label>
+        <label class="toggle"><input type="checkbox" id="tog-flood" checked/><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <label>&#9968; Landslide</label>
+        <label class="toggle"><input type="checkbox" id="tog-landslide" checked/><span class="slider"></span></label>
+      </div>
+    </div>
+    <button id="analyze-btn" onclick="runAnalysis()">&#9889; Analyze Region</button>
+    <div>
+      <div class="section-label">Region Stats</div>
+      <div class="stat-pill"><span>High-risk nodes</span><strong id="stat-high">—</strong></div>
+      <div style="height:5px"></div>
+      <div class="stat-pill"><span>Mean risk score</span><strong id="stat-mean">—</strong></div>
+      <div style="height:5px"></div>
+      <div class="stat-pill"><span>Max risk score</span><strong id="stat-max">—</strong></div>
+      <div style="height:5px"></div>
+      <div class="stat-pill"><span>Total nodes</span><strong id="stat-total">—</strong></div>
+    </div>
+  </aside>
+
+  <!-- progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- toast -->
+  <div id="toast"></div>
+
+  <!-- map -->
+  <div id="map-container">
+    <div id="map"></div>
+    <div id="map-spinner"><div class="spinner"></div><span id="spinner-msg">Loading satellite data…</span></div>
+    <div id="map-error">
+      <div class="err-icon">&#9888;&#65039;</div>
+      <h2>Failed to load map data</h2>
+      <p id="map-error-msg">Could not reach the server. Make sure the Flask backend is running on port 5000.</p>
+      <button onclick="retryLoad()">Retry</button>
+    </div>
+  </div>
+
+  <!-- right panel -->
+  <aside id="right-panel">
+    <div class="panel-title">Region Summary</div>
+    <div id="summary-content">
+      <div class="placeholder-msg">Click a grid cell on the map<br>to see cascade risk details.</div>
+    </div>
+    <div id="slow-notice">This is taking longer than usual…</div>
+  </aside>
+
+  <!-- bottom bar -->
+  <footer id="bottombar">
+    <span class="bottom-label">Top Risk Zones:</span>
+    <div id="top-zones-list" style="display:flex;gap:6px;"></div>
+    <div class="bottom-right">
+      <span>Model Confidence: <span class="conf-val" id="conf-val">—</span></span>
+      <span class="updated-val" id="last-updated">—</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// ── state ───────────────────────────────────────────────────────────────────
+const GRID = 50;
+let mapData        = null;
+let tsChart        = null;
+let gridLayers     = [];
+let landslideLayer = null;
+let selectedCell   = null;
+let presetRegions  = {};   // populated from /api/regions on boot
+
+// ── map init ────────────────────────────────────────────────────────────────
+const map = L.map("map", {
+  center: [37.5, -119.5],
+  zoom: 6,
+  zoomControl: true,
+  preferCanvas: true,
+});
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '© OpenStreetMap',
+  opacity: 0.25,
+}).addTo(map);
+
+// ── colour helpers ──────────────────────────────────────────────────────────
+function scoreToColor(v) {
+  const stops = [
+    [0.00, [255,255,255,0]],
+    [0.20, [255,230,220,100]],
+    [0.40, [255,160,120,160]],
+    [0.60, [220, 60, 40,200]],
+    [0.80, [160,  0,  0,220]],
+    [1.00, [100,  0,  0,240]],
+  ];
+  for (let i = 1; i < stops.length; i++) {
+    const [t0, c0] = stops[i-1];
+    const [t1, c1] = stops[i];
+    if (v <= t1) {
+      const t = (v - t0) / (t1 - t0);
+      return stops[i-1][1].map((c,j) => Math.round(c + t*(c1[j]-c)));
+    }
+  }
+  return stops[stops.length-1][1];
+}
+
+function rgbaStr([r,g,b,a]) {
+  return `rgba(${r},${g},${b},${(a/255).toFixed(2)})`;
+}
+
+function riskColor(level) {
+  return {Low:'#3fb950',Medium:'#d29922',High:'#f78166',Critical:'#ff6b6b'}[level]||'#8b949e';
+}
+
+// ── render grid ──────────────────────────────────────────────────────────────
+function renderGrid(grid, bbox) {
+  gridLayers.forEach(l => map.removeLayer(l));
+  gridLayers = [];
+
+  const latStep = (bbox.north - bbox.south) / GRID;
+  const lonStep = (bbox.east  - bbox.west)  / GRID;
+
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const score = grid[r][c];
+      const color = rgbaStr(scoreToColor(score));
+      const south = bbox.north - (r+1)*latStep;
+      const north = bbox.north -  r   *latStep;
+      const west  = bbox.west  +  c   *lonStep;
+      const east  = bbox.west  + (c+1)*lonStep;
+      const nodeIdx = r * GRID + c;
+
+      const rect = L.rectangle([[south,west],[north,east]], {
+        color: 'transparent', fillColor: color, fillOpacity: 1,
+        weight: 0,
+      }).addTo(map);
+
+      rect.on('click', () => fetchNodeSummary(nodeIdx));
+      rect.on('mouseover', function() {
+        this.setStyle({color:'#f78166', weight:1});
+      });
+      rect.on('mouseout', function() {
+        if (selectedCell !== nodeIdx) this.setStyle({color:'transparent', weight:0});
+      });
+
+      rect._nodeIdx = nodeIdx;
+      gridLayers.push(rect);
+    }
+  }
+}
+
+// ── render landslide dots ────────────────────────────────────────────────────
+function renderLandslides(points) {
+  if (landslideLayer) map.removeLayer(landslideLayer);
+  const markers = points.map(p => {
+    const m = L.circleMarker([p.latitude, p.longitude], {
+      radius: 4, fillColor: '#58a6ff', color: '#1a5080',
+      weight: 1, fillOpacity: 0.8,
+    });
+    m.bindTooltip(`${p.type || 'landslide'}<br>${p.latitude.toFixed(3)}, ${p.longitude.toFixed(3)}`,
+      {className:'', direction:'top'});
+    return m;
+  });
+  landslideLayer = L.layerGroup(markers).addTo(map);
+}
+
+// ── update stats ─────────────────────────────────────────────────────────────
+function updateStats(stats) {
+  document.getElementById('stat-high').textContent  = stats.high_risk;
+  document.getElementById('stat-mean').textContent  = stats.mean.toFixed(3);
+  document.getElementById('stat-max').textContent   = stats.max.toFixed(3);
+  document.getElementById('stat-total').textContent = stats.total_nodes;
+}
+
+// ── bottom bar top zones ──────────────────────────────────────────────────────
+function renderTopZones(zones) {
+  const el = document.getElementById('top-zones-list');
+  el.innerHTML = zones.map(z => `
+    <div class="top-zone" onclick="fetchNodeSummary(${z.node_index})">
+      <span class="tz-score" style="color:${riskColor(z.risk_level)}">${(z.risk_score*100).toFixed(0)}%</span>
+      <span class="tz-loc">${z.lat.toFixed(2)}°N ${Math.abs(z.lon).toFixed(2)}°W</span>
+    </div>`).join('');
+}
+
+// ── time series chart ─────────────────────────────────────────────────────────
+function renderChart(ts) {
+  const ctx = document.getElementById('ts-canvas');
+  if (!ctx) return;
+  if (tsChart) { tsChart.destroy(); tsChart = null; }
+  tsChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ts.months.map(m => m.slice(0,7)),
+      datasets: [
+        { label:'Fire',          data: ts.fire,          borderColor:'#f78166', borderWidth:1.5, pointRadius:0, tension:.3, fill:false },
+        { label:'Soil Moisture', data: ts.soil_moisture, borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, tension:.3, fill:false },
+        { label:'NDVI',          data: ts.ndvi,          borderColor:'#3fb950', borderWidth:1.5, pointRadius:0, tension:.3, fill:false },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { labels: { color:'#8b949e', boxWidth:12, font:{size:10} } },
+      },
+      scales: {
+        x: { ticks:{ color:'#8b949e', maxTicksLimit:6, font:{size:9} }, grid:{color:'#21262d'} },
+        y: { ticks:{ color:'#8b949e', font:{size:9} }, grid:{color:'#21262d'} },
+      },
+    },
+  });
+}
+
+// ── trend badge helper ────────────────────────────────────────────────────────
+function trendPill(pct) {
+  if (pct == null) return '';
+  const val   = parseFloat(pct);
+  const isPos = val >= 0;
+  const arrow = val > 0 ? '&#8679;' : val < 0 ? '&#8681;' : '&#8596;';
+  const cls   = val > 5 ? 'trend-increasing' : val < -5 ? 'trend-decreasing' : 'trend-stable';
+  return `<span class="trend-badge ${cls}" style="font-size:10px;padding:1px 5px">${arrow} ${pct}</span>`;
+}
+
+// ── right panel summary ───────────────────────────────────────────────────────
+function renderSummary(d) {
+  const ft = d.feature_trends || {};
+
+  // cascade chain nodes with per-feature trend pill
+  const chainLabels = [
+    { label: 'Fire Activity',      feat: 'fire' },
+    { label: 'Vegetation (NDVI)',  feat: 'ndvi' },
+    { label: 'Soil Moisture',      feat: 'soil' },
+    { label: 'Landslide Risk',     feat: null   },
+  ];
+  const chainHtml = chainLabels.map((item, i) => {
+    const isLast  = i === chainLabels.length - 1;
+    const pill    = item.feat ? trendPill(ft[item.feat]) : '';
+    const nodeStyle = isLast
+      ? 'border-color:var(--accent);color:var(--accent)'
+      : '';
+    return `
+      <div class="chain-step">
+        <div class="chain-node" style="${nodeStyle}">
+          ${item.label} ${pill}
+        </div>
+      </div>
+      ${!isLast ? `<div style="display:flex;align-items:center;gap:6px;padding:0 8px">
+        <span class="chain-arrow">&#8595;</span>
+        <span class="chain-lag">${d.cascade_chain[i]?.lag || ''}</span>
+      </div>` : ''}`;
+  }).join('');
+
+  // feature trends summary row
+  const trendsRow = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--muted);align-self:center">3-mo trend:</span>
+      <span style="font-size:11px">&#128293; Fire ${trendPill(ft.fire) || '<span style="color:var(--muted)">—</span>'}</span>
+      <span style="font-size:11px">&#127807; NDVI ${trendPill(ft.ndvi) || '<span style="color:var(--muted)">—</span>'}</span>
+      <span style="font-size:11px">&#128167; Soil ${trendPill(ft.soil) || '<span style="color:var(--muted)">—</span>'}</span>
+    </div>`;
+
+  document.getElementById('summary-content').innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <span class="risk-score-big" style="color:${riskColor(d.risk_level)}">${(d.risk_score*100).toFixed(1)}%</span>
+      <span class="risk-badge risk-${d.risk_level}">${d.risk_level}</span>
+      <span class="trend-badge trend-${d.trend}">${d.trend === 'increasing' ? '&#8679;' : d.trend === 'decreasing' ? '&#8681;' : '&#8596;'} ${d.trend}</span>
+    </div>
+    <div class="coord-line">${d.lat.toFixed(4)}°N, ${Math.abs(d.lon).toFixed(4)}°W &nbsp;·&nbsp; Node #${d.node_index}</div>
+
+    ${trendsRow}
+
+    <div>
+      <div class="panel-title" style="margin-bottom:6px">Cascade Chain</div>
+      <div class="cascade-chain">${chainHtml}</div>
+    </div>
+
+    <div>
+      <div class="panel-title" style="margin-bottom:6px">Primary Trigger</div>
+      <div class="trigger-box">${d.trigger}</div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <div class="stat-pill" style="flex:1"><span>Historical events</span><strong>${d.landslide_count}</strong></div>
+    </div>
+
+    <div>
+      <div class="panel-title" style="margin-bottom:6px">48-Month Time Series</div>
+      <div id="ts-chart-container"><canvas id="ts-canvas"></canvas></div>
+    </div>
+
+    <div id="causal-section">
+      <button class="causal-toggle" id="causal-toggle-btn" onclick="toggleCausal()">
+        <span>Causal Discovery Graph</span>
+        <span class="chevron">&#9660;</span>
+      </button>
+      <div id="causal-body">
+        <svg id="causal-svg" viewBox="0 0 260 200" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="causal-legend">
+          <div class="causal-legend-item">
+            <div class="causal-legend-dot" style="background:#e74c3c"></div><span>Fire</span>
+          </div>
+          <div class="causal-legend-item">
+            <div class="causal-legend-dot" style="background:#3498db"></div><span>Soil Moisture</span>
+          </div>
+          <div class="causal-legend-item">
+            <div class="causal-legend-dot" style="background:#2ecc71"></div><span>NDVI</span>
+          </div>
+          <div class="causal-legend-item" style="margin-left:auto">
+            <span style="font-size:9px">arrow width = strength</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  renderChart(d.time_series);
+  renderCausalSVG(d.feature_trends);
+}
+
+// ── causal discovery SVG ─────────────────────────────────────────────────────
+function toggleCausal() {
+  const btn  = document.getElementById('causal-toggle-btn');
+  const body = document.getElementById('causal-body');
+  if (!btn || !body) return;
+  btn.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+function renderCausalSVG(featureTrends) {
+  const svg = document.getElementById('causal-svg');
+  if (!svg) return;
+
+  // node positions in the 260×200 viewBox — triangle layout
+  const nodes = {
+    fire: { x: 130, y: 30,  r: 28, color: '#e74c3c', label: 'Fire' },
+    soil: { x: 45,  y: 158, r: 28, color: '#3498db', label: 'Soil' },
+    ndvi: { x: 215, y: 158, r: 28, color: '#2ecc71', label: 'NDVI' },
+  };
+
+  // causal links derived from PCMCI findings + feature_trends context
+  // structure: cause → effect, lag label, strength (0-1 for line width)
+  const links = [
+    { from: 'fire', to: 'ndvi', lag: 'lag 1',  strength: 0.49 },
+    { from: 'ndvi', to: 'soil', lag: 'lag 1',  strength: 0.45 },
+    { from: 'soil', to: 'soil', lag: 'lag 1',  strength: 0.75, self: true },
+    { from: 'ndvi', to: 'ndvi', lag: 'lag 1',  strength: 0.70, self: true },
+    { from: 'fire', to: 'fire', lag: 'lag 1',  strength: 0.49, self: true },
+  ];
+
+  // if feature_trends available, highlight links whose cause changed significantly
+  const activeCauses = new Set();
+  if (featureTrends) {
+    for (const [feat, val] of Object.entries(featureTrends)) {
+      if (val && Math.abs(parseFloat(val)) > 10) activeCauses.add(feat);
+    }
+  }
+
+  // SVG helpers
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  }
+
+  function arrowHead(id, color) {
+    const marker = svgEl('marker', {
+      id, markerWidth: '8', markerHeight: '8',
+      refX: '6', refY: '3', orient: 'auto',
+    });
+    marker.appendChild(svgEl('path', { d: 'M0,0 L0,6 L8,3 z', fill: color }));
+    return marker;
+  }
+
+  svg.innerHTML = '';   // clear previous render
+
+  // defs: arrow markers per link color
+  const defs = svgEl('defs', {});
+  links.filter(l => !l.self).forEach((l, i) => {
+    const active = activeCauses.has(l.from);
+    const color  = active ? nodes[l.from].color : '#555e6a';
+    defs.appendChild(arrowHead(`ah${i}`, color));
+  });
+  svg.appendChild(defs);
+
+  // draw cross-node arrows first (under nodes)
+  links.filter(l => !l.self).forEach((l, i) => {
+    const a = nodes[l.from], b = nodes[l.to];
+    const active = activeCauses.has(l.from);
+    const color  = active ? a.color : '#555e6a';
+    const lw     = 1 + l.strength * 3;
+
+    // offset perpendicular to avoid overlap on bidirectional edges
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    const px = -dy / len * 6, py = dx / len * 6;
+
+    // shorten endpoints to node edge
+    const sx = a.x + (dx / len) * (a.r + 2) + px;
+    const sy = a.y + (dy / len) * (a.r + 2) + py;
+    const ex = b.x - (dx / len) * (b.r + 7) + px;
+    const ey = b.y - (dy / len) * (b.r + 7) + py;
+
+    const line = svgEl('line', {
+      x1: sx, y1: sy, x2: ex, y2: ey,
+      stroke: color, 'stroke-width': lw,
+      'marker-end': `url(#ah${i})`,
+      opacity: active ? 0.9 : 0.35,
+    });
+    svg.appendChild(line);
+
+    // lag + strength label at midpoint
+    const mx = (sx + ex) / 2 + px * 1.5;
+    const my = (sy + ey) / 2 + py * 1.5;
+    const bg = svgEl('rect', {
+      x: mx - 18, y: my - 9, width: 36, height: 14,
+      rx: 3, fill: '#161b22', opacity: 0.85,
+    });
+    const txt = svgEl('text', {
+      x: mx, y: my + 1, 'text-anchor': 'middle',
+      'font-size': '7.5', fill: active ? color : '#8b949e',
+      'font-family': 'sans-serif',
+    });
+    txt.textContent = `${l.lag} · ${l.strength.toFixed(2)}`;
+    svg.appendChild(bg);
+    svg.appendChild(txt);
+  });
+
+  // self-loops as small arcs above/left of nodes
+  const selfOffsets = { fire: { cx: 108, cy: 10 }, soil: { cx: 23, cy: 148 }, ndvi: { cx: 237, cy: 148 } };
+  links.filter(l => l.self).forEach(l => {
+    const n   = nodes[l.from];
+    const off = selfOffsets[l.from];
+    const color = '#555e6a';
+    const lw  = 1 + l.strength * 1.5;
+    const arc = svgEl('path', {
+      d: `M${n.x - 10},${n.y - n.r + 4} Q${off.cx},${off.cy} ${n.x + 10},${n.y - n.r + 4}`,
+      stroke: color, 'stroke-width': lw, fill: 'none', opacity: 0.4,
+    });
+    svg.appendChild(arc);
+
+    const ltxt = svgEl('text', {
+      x: off.cx, y: off.cy - 3, 'text-anchor': 'middle',
+      'font-size': '7', fill: '#8b949e', 'font-family': 'sans-serif',
+    });
+    ltxt.textContent = `${l.lag}`;
+    svg.appendChild(ltxt);
+  });
+
+  // nodes on top
+  for (const [key, n] of Object.entries(nodes)) {
+    const active = activeCauses.has(key);
+    const glow   = active ? `drop-shadow(0 0 5px ${n.color})` : 'none';
+
+    const circle = svgEl('circle', {
+      cx: n.x, cy: n.y, r: n.r,
+      fill: n.color, opacity: active ? 0.92 : 0.55,
+      style: `filter:${glow}`,
+    });
+    const label = svgEl('text', {
+      x: n.x, y: n.y + 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      'font-size': '9', 'font-weight': 'bold', fill: '#fff',
+      'font-family': 'sans-serif',
+    });
+    label.textContent = n.label;
+
+    // trend annotation beneath label
+    if (featureTrends) {
+      const trendKey = key === 'soil' ? 'soil' : key;
+      const val = featureTrends[trendKey];
+      if (val) {
+        const v = parseFloat(val);
+        const ta = svgEl('text', {
+          x: n.x, y: n.y + 13, 'text-anchor': 'middle',
+          'font-size': '7.5', fill: v >= 0 ? '#ff6b6b' : '#3fb950',
+          'font-family': 'sans-serif',
+        });
+        ta.textContent = val;
+        svg.appendChild(ta);
+      }
+    }
+
+    svg.appendChild(circle);
+    svg.appendChild(label);
+  }
+}
+
+// ── progress bar ──────────────────────────────────────────────────────────────
+let _progressTimer  = null;
+let _progressActive = 0;   // reference count — supports concurrent calls
+
+function progressStart() {
+  _progressActive++;
+  const bar = document.getElementById('progress-bar');
+  bar.classList.remove('done');
+  bar.classList.add('running');
+  bar.style.width = '0%';
+  clearTimeout(_progressTimer);
+  // animate to 85% quickly, then stall — completion happens in progressDone()
+  requestAnimationFrame(() => { bar.style.width = '85%'; });
+}
+
+function progressDone() {
+  _progressActive = Math.max(0, _progressActive - 1);
+  if (_progressActive > 0) return;
+  const bar = document.getElementById('progress-bar');
+  bar.classList.add('done');
+  bar.style.width = '100%';
+  _progressTimer = setTimeout(() => {
+    bar.classList.remove('running', 'done');
+    bar.style.width = '0%';
+  }, 600);
+}
+
+// ── toast ─────────────────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, durationMs = 4000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), durationMs);
+}
+
+function setSpinner(visible, msg = 'Loading satellite data…') {
+  document.getElementById('map-spinner').style.display = visible ? 'flex' : 'none';
+  document.getElementById('spinner-msg').textContent = msg;
+}
+
+function clearSummaryPanel() {
+  selectedCell = null;
+  document.getElementById('summary-content').innerHTML =
+    '<div class="placeholder-msg">Click a grid cell on the map<br>to see cascade risk details.</div>';
+  if (tsChart) { tsChart.destroy(); tsChart = null; }
+}
+
+function fitMapToBbox(bbox) {
+  map.fitBounds([
+    [bbox.south, bbox.west],
+    [bbox.north, bbox.east],
+  ], { animate: true, padding: [10, 10] });
+}
+
+// ── api calls ─────────────────────────────────────────────────────────────────
+async function loadRegions() {
+  try {
+    const res  = await fetch('/api/regions');
+    presetRegions = await res.json();
+  } catch(e) {
+    // fall back to hardcoded if endpoint unavailable
+    presetRegions = {
+      california: { bbox: {west:-124.48,south:32.53,east:-114.13,north:42.01} },
+      australia:  { bbox: {west:143.0,south:-39.0,east:154.0,north:-28.0} },
+      amazon:     { bbox: {west:-73.0,south:-15.0,east:-45.0,north:5.0} },
+    };
+  }
+}
+
+function showMapError(msg) {
+  document.getElementById('map-error-msg').textContent = msg;
+  document.getElementById('map-error').style.display = 'flex';
+}
+
+function hideMapError() {
+  document.getElementById('map-error').style.display = 'none';
+}
+
+async function retryLoad() {
+  hideMapError();
+  await loadStaticMap();
+}
+
+async function loadStaticMap() {
+  setSpinner(true, 'Loading satellite data…');
+  hideMapError();
+  progressStart();
+  try {
+    const res = await fetch('/api/static_risk_map');
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    mapData = data;
+    renderGrid(data.grid, data.bbox);
+    renderLandslides(data.landslides);
+    updateStats(data.stats);
+    fitMapToBbox(data.bbox);
+    document.getElementById('top-status').textContent =
+      `California loaded — ${data.stats.total_nodes} nodes · ${data.landslides.length} historical events`;
+    document.getElementById('last-updated').textContent =
+      'Updated: ' + new Date().toLocaleTimeString();
+    document.getElementById('conf-val').textContent = '—';
+  } catch(e) {
+    document.getElementById('top-status').textContent = 'Failed to load map.';
+    showMapError(
+      `Could not reach the server: ${e.message}. ` +
+      'Make sure the Flask backend is running on port 5000.'
+    );
+  } finally {
+    setSpinner(false);
+    progressDone();
+  }
+}
+
+async function fetchNodeSummary(nodeIdx) {
+  selectedCell = nodeIdx;
+
+  // skeleton loading state
+  document.getElementById('summary-content').innerHTML = `
+    <div class="sk-line wide skeleton"></div>
+    <div class="sk-line short skeleton"></div>
+    <div style="height:6px"></div>
+    <div class="sk-block skeleton"></div>
+    <div class="sk-line med skeleton"></div>
+    <div class="sk-line wide skeleton"></div>
+    <div class="sk-line short skeleton"></div>`;
+  document.getElementById('slow-notice').style.display = 'none';
+
+  progressStart();
+
+  // show "taking longer" after 3 s
+  const slowTimer = setTimeout(() => {
+    document.getElementById('slow-notice').style.display = 'block';
+  }, 3000);
+
+  try {
+    const res  = await fetch('/api/region_summary', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({node_index: nodeIdx}),
+    });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    renderSummary(data);
+  } catch(e) {
+    document.getElementById('summary-content').innerHTML =
+      `<div class="placeholder-msg" style="color:var(--critical)">
+         Failed to load node data.<br>
+         <span style="font-size:11px;color:var(--muted)">${e.message}</span>
+       </div>`;
+  } finally {
+    clearTimeout(slowTimer);
+    document.getElementById('slow-notice').style.display = 'none';
+    progressDone();
+  }
+}
+
+async function runAnalysis() {
+  const btn    = document.getElementById('analyze-btn');
+  const region = document.getElementById('region-select').value;
+  const bbox   = presetRegions[region]?.bbox
+               || {west:-124.48,south:32.53,east:-114.13,north:42.01};
+
+  const hazards = [];
+  if (document.getElementById('tog-fire').checked)      hazards.push('fire');
+  if (document.getElementById('tog-flood').checked)     hazards.push('flood');
+  if (document.getElementById('tog-landslide').checked) hazards.push('landslide');
+
+  btn.disabled    = true;
+  btn.textContent = 'Analyzing...';
+  setSpinner(true, 'Fetching satellite data…');
+  clearSummaryPanel();
+  progressStart();
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        region_bbox: bbox,
+        start_date:  document.getElementById('date-start').value,
+        end_date:    document.getElementById('date-end').value,
+        hazards,
+      }),
+    });
+
+    const data = await res.json();
+
+    // server-side GEE error comes back as HTTP 502 with {error: ...}
+    if (!res.ok || data.error) {
+      showToast('Satellite fetch failed — try again');
+      document.getElementById('top-status').textContent =
+        'GEE error: ' + (data.error || res.statusText);
+      return;
+    }
+
+    // ── replace map with new region ───────────────────────────────────────
+    renderGrid(data.grid, data.bbox);
+    if (landslideLayer) { map.removeLayer(landslideLayer); landslideLayer = null; }
+    fitMapToBbox(data.bbox);
+
+    // ── update all panels ─────────────────────────────────────────────────
+    renderTopZones(data.top5_zones);
+    document.getElementById('stat-high').textContent  = data.high_risk_count;
+    document.getElementById('stat-mean').textContent  = data.mean_risk.toFixed(3);
+    document.getElementById('stat-max').textContent   = data.max_risk.toFixed(3);
+    document.getElementById('stat-total').textContent = data.nodes_analyzed;
+    document.getElementById('conf-val').textContent   = (data.model_confidence * 100).toFixed(1) + '%';
+    document.getElementById('top-status').textContent =
+      `${presetRegions[region]?.name || region} — ${data.nodes_analyzed} nodes · `
+      + `${data.high_risk_count} high-risk · model: ${data.model}`;
+    document.getElementById('last-updated').textContent =
+      'Updated: ' + new Date().toLocaleTimeString();
+
+  } catch(e) {
+    showToast('Satellite fetch failed — try again');
+    document.getElementById('top-status').textContent = 'Network error: ' + e.message;
+  } finally {
+    setSpinner(false);
+    progressDone();
+    btn.disabled    = false;
+    btn.textContent = 'Analyze Region';
+  }
+}
+
+// ── boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  await loadRegions();
+  await loadStaticMap();
+})();
+</script>
+</body>
+</html>

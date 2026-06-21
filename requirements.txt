@@ -1,0 +1,12 @@
+earthengine-api
+geemap
+torch
+torch-geometric
+geopandas
+rasterio
+tigramite
+matplotlib
+pandas
+numpy
+scikit-learn
+folium

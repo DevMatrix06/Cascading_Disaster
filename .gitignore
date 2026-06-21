@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+*.egg-info/
+
+# Large data files — fetch with fetch_data.py / fetch_temporal_data.py
+data/raw/
+data/processed/
+
+# Trained model weights — retrain with train_model.py
+models/saved/
+
+# Visualisation outputs — regenerate with visualize_data.py / risk_map.py
+visualizations/*.png
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
