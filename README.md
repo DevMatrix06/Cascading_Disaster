@@ -1,8 +1,16 @@
-# Cascade Disaster Prediction
+<div align="center">
 
-> Spatiotemporal Graph Neural Network for predicting cascading natural disasters (wildfire → landslide) using NASA satellite data and causal inference.
+# 🌋 Cascade Disaster Prediction
 
-![Risk Map](visualizations/cascade_risk_map.png)
+**Spatiotemporal Graph Neural Network for predicting cascading natural disasters** (wildfire → landslide) using NASA satellite data and causal inference.
+
+<img src="https://img.shields.io/badge/Python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white" />
+<img src="https://img.shields.io/badge/PyTorch%20Geometric-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" />
+<img src="https://img.shields.io/badge/Google%20Earth%20Engine-4285F4?style=flat-square&logo=googleearth&logoColor=white" />
+<img src="https://img.shields.io/badge/tigramite-causal%20discovery-7C3AED?style=flat-square" />
+<img src="https://img.shields.io/badge/license-MIT-00C2FF?style=flat-square" />
+
+</div>
 
 ---
 
@@ -10,33 +18,31 @@
 
 Most disaster prediction systems model hazards in isolation. This project models the **cascade** — wildfire burns vegetation, dry soil loses cohesion, rainfall triggers landslide. The full chain, predicted from satellite data alone.
 
-Built on 4 years of NASA/ESA observations over California (2020–2023), validated against 657 real landslide events from the NASA COOLR catalog, with a live interactive dashboard.
+Built on 4 years of NASA/ESA observations over California (2020–2023), validated against **657 real landslide events** from the NASA COOLR catalog, with a live interactive dashboard.
 
----
+<p align="center">
+  <img src="visualizations/cascade_risk_map.png" width="600" alt="Cascade risk heatmap over California" />
+</p>
 
-## Results
+## ⚡ Quickstart (use the pretrained model)
 
-| Model | Precision | Recall | F1 | Params |
-|---|---|---|---|---|
-| Static GNN (baseline) | 0.128 | 0.840 | 0.223 | 8,961 |
-| Temporal only (LSTM) | 0.344 | 0.660 | 0.452 | 17,793 |
-| **Static + Temporal (full)** | **0.305** | **0.780** | **0.439** | **17,793** |
-
-> Test set: held-out 2023 temporal window + stratified 80/20 node split. Model catches 6 in 10 real landslide zones on unseen data.
-
-**Key causal finding:** NDVI decline Granger-causes soil moisture loss at 1-month lag (PCMCI strength 0.450, frequency 24%) — the drought-to-landslide precursor chain confirmed from satellite data alone.
-
----
-
-## Dashboard
-
-![Dashboard](visualizations/dashboard_screenshot.png)
+Already have a trained checkpoint in `models/saved/`? Skip straight to the dashboard:
 
 ```bash
+git clone https://github.com/DevMatrix06/Cascading_Disaster.git
+cd Cascading_Disaster
 pip install -r requirements.txt
 python app/run.py
 # Open http://localhost:5000
 ```
+
+For full setup (fetching satellite data, training from scratch), see [Full Setup](#full-setup) below.
+
+## Dashboard
+
+<p align="center">
+  <img src="visualizations/dashboard_demo.gif" width="700" alt="Interactive dashboard demo" />
+</p>
 
 - Live satellite data via Google Earth Engine for any region on Earth
 - 50×50 risk heatmap overlaid on OpenStreetMap
@@ -44,7 +50,21 @@ python app/run.py
 - 48-month time series per node with trend detection
 - PCMCI causal graph visualization inline
 
----
+> 💡 Don't have a GIF yet? Record one with [Peek](https://github.com/phw/peek) (Linux) or [ScreenToGif](https://www.screentogif.com/) (Windows) — a 5–10s loop of the heatmap + causal graph sells this project far better than a static screenshot.
+
+## Results
+
+| Model | Precision | Recall | F1 | Params |
+|---|---|---|---|---|
+| Static GNN (baseline) | 0.128 | 0.840 | 0.223 | 8,961 |
+| Temporal only (LSTM) | 0.344 | 0.660 | 0.452 | 17,793 |
+| **Static + Temporal (full)** | 0.305 | 0.780 | 0.439 | 17,793 |
+
+*Test set: held-out 2023 temporal window + stratified 80/20 node split. Model catches 6 in 10 real landslide zones on unseen data.*
+
+The full model trades a small amount of precision for materially higher recall than temporal-only (0.78 vs. 0.66) at nearly the same F1 — for an early-warning use case, missing fewer real landslides matters more than a few extra false alarms, so the full model is the one shipped in the dashboard.
+
+**Key causal finding:** NDVI decline Granger-causes soil moisture loss at 1-month lag (PCMCI strength 0.450, frequency 24%) — the drought-to-landslide precursor chain confirmed from satellite data alone.
 
 ## Architecture
 
@@ -69,8 +89,6 @@ NASA Satellite Data
          (tigramite, ParCorr, max lag 3 months)
 ```
 
----
-
 ## Data Sources
 
 | Dataset | Source | Resolution | Use |
@@ -83,58 +101,46 @@ NASA Satellite Data
 
 All data fetched via Google Earth Engine. 657 California landslide events → 251 unique high-risk grid nodes (1:9 class imbalance).
 
----
+## Full Setup
 
-## Setup
-
-### 1. Install dependencies
-
+**1. Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Authenticate Google Earth Engine
-
+**2. Authenticate Google Earth Engine**
 ```bash
 earthengine authenticate
 ```
+You need a Google Earth Engine account — sign up free at [earthengine.google.com](https://earthengine.google.com).
 
-> You need a Google Earth Engine account. Sign up free at [earthengine.google.com](https://earthengine.google.com)
-
-### 3. Fetch satellite data
-
+**3. Fetch satellite data**
 ```bash
 python data/fetch_data.py
 python data/fetch_temporal_data.py
 ```
 
-### 4. Build graph and labels
-
+**4. Build graph and labels**
 ```bash
 python data/process_landslide_labels.py
 python data/build_graph_with_labels.py
 python data/build_temporal_graph.py
 ```
 
-### 5. Train model
-
+**5. Train model**
 ```bash
 python models/train_model.py
 ```
 
-### 6. Run causal analysis
-
+**6. Run causal analysis**
 ```bash
 python models/causal_analysis.py
 ```
 
-### 7. Launch dashboard
-
+**7. Launch dashboard**
 ```bash
 python app/run.py
 ```
-
----
 
 ## Project Structure
 
@@ -170,8 +176,6 @@ cascade-disaster-prediction/
 └── PAPER_DRAFT.md
 ```
 
----
-
 ## Causal Discovery Results
 
 | Cause | Effect | Lag | Strength | Frequency |
@@ -183,22 +187,28 @@ cascade-disaster-prediction/
 
 The NDVI → soil moisture link at lag 1 month is the key cross-variable finding. Vegetation stress precedes soil moisture loss — a known drought-to-landslide precursor confirmed from observational satellite data.
 
----
+<p align="center">
+  <img src="visualizations/causal_graph.png" width="500" alt="PCMCI causal graph" />
+</p>
 
 ## Limitations
 
 - 21 km spatial resolution too coarse for individual hillslope prediction
 - NASA COOLR catalog underreports events in rural areas
 - Zero-shot transfer to Australia shows no score separation — domain adaptation required for global deployment
-- Spatial block cross-validation not implemented
-
----
+- Spatial block cross-validation not implemented (nearby grid cells are spatially autocorrelated, so reported metrics may be optimistic — this is the top priority fix)
 
 ## Tech Stack
 
-`PyTorch` `PyTorch Geometric` `Google Earth Engine` `tigramite` `rasterio` `geopandas` `Flask` `Leaflet.js` `Chart.js`
-
----
+<img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" />
+<img src="https://img.shields.io/badge/PyTorch%20Geometric-3C2179?style=flat-square" />
+<img src="https://img.shields.io/badge/Google%20Earth%20Engine-4285F4?style=flat-square&logo=googleearth&logoColor=white" />
+<img src="https://img.shields.io/badge/tigramite-7C3AED?style=flat-square" />
+<img src="https://img.shields.io/badge/rasterio-00A3E0?style=flat-square" />
+<img src="https://img.shields.io/badge/geopandas-139C5A?style=flat-square" />
+<img src="https://img.shields.io/badge/Flask-000000?style=flat-square&logo=flask&logoColor=white" />
+<img src="https://img.shields.io/badge/Leaflet.js-199900?style=flat-square&logo=leaflet&logoColor=white" />
+<img src="https://img.shields.io/badge/Chart.js-FF6384?style=flat-square&logo=chart.js&logoColor=white" />
 
 ## License
 
